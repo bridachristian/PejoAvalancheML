@@ -11,6 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import zscore
 import seaborn as sns
+import joblib
+import json
+import shap
+from pathlib import Path
 
 
 # URL dei dati
@@ -438,8 +442,9 @@ def main():
     # rilievi_num["Ta"][0] = 55
     # rilievi_num["Tmin"][0] = 54
     # rilievi_num["Tmax"][0] = 1
-    # rilievi_num["TH10"][0] = 55
-    # rilievi_num["TH30"][0] = 54
+    rilievi_num["TH10"][:] = 55
+    rilievi_num["TH30"][:] = 54
+    rilievi_num["PR"][:] = 0
     # rilievi_num["HN"][0:2] = [10, 2]
 
     # ---- TRASFORMA E SISTEMA LA STRUTTRA DELLA TABELLA ------
@@ -501,10 +506,22 @@ def main():
     # Selezione delle colonne presenti
     df_selezionato = df_final[colonne_da_selezionare]
 
+    # Prende l'ultima riga come DataFrame
+    last_row = df_selezionato.iloc[-1:]
+
+    # Trova le colonne con NaN nella riga
+    nan_in_last = last_row.isna().any()
+
+    if nan_in_last.any():
+        print("⚠️ La riga più recente contiene valori NaN:")
+        print("⚠️ NON E' POSSIBILE ESEGUIRE LA PREVISIONE")
+        print(last_row.loc[:, nan_in_last])
+        # return
+
+    else:
+        print("✅ Nessun NaN nella riga più recente!")
+
     # ---- CARICA MODELLO SVM ALLENATO E BACKGROUND SHAP ------
-    import joblib
-    import shap
-    from pathlib import Path
 
     model_path = Path(
         'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\model\\')
@@ -516,7 +533,89 @@ def main():
     with open(model_path / "svm_features.json", "r") as f:
         features_used = json.load(f)
 
-    available_features = [col for col in feature_set if col in mod1.columns]
+    feature_set = ['HSnum', 'TH01G', 'PR', 'DayOfSeason', 'TmaxG_delta_5d',
+                   'HS_delta_5d', 'TH03G', 'HS_delta_1d', 'TmaxG_delta_3d',
+                   'Precip_3d', 'TempGrad_HS', 'HS_delta_2d', 'TmaxG_delta_2d',
+                   'TminG_delta_5d', 'TminG_delta_3d', 'Tsnow_delta_3d',
+                   'TaG_delta_5d', 'Tsnow_delta_1d',
+                   'TmaxG_delta_1d', 'Precip_2d']   # SHAP 20 features
+
+    available_features = [
+        col for col in feature_set if col in df_selezionato.columns]
+
+    X = last_row
+
+    # Create explainer from background
+    explainer = shap.KernelExplainer(svm_model.predict_proba, X_background)
+
+    X_scaled = scaler.transform(X)
+
+    # 1. Previsione
+    y_pred = svm_model.predict(X_scaled)
+    y_pred_df = pd.DataFrame(y_pred, index=X.index)
+
+    # 2. Probabilità di classe positiva (AvalDay = 1)
+    # colonna indice 1 → classe positiva
+    y_proba = svm_model.predict_proba(X_scaled)[:, 1]
+
+    # 3. Costruisci il DataFrame dei risultati
+    results_df = pd.DataFrame({
+        'Predicted_AvalDay': y_pred,
+        'Prob_AvalDay': y_proba
+    }, index=X.index)
+
+    # SHAP ANALYSIS
+    # 1. Scala i dati reali
+    X_real_scaled = scaler.transform(X)
+    X_real_scaled_df = pd.DataFrame(
+        X_real_scaled, columns=X.columns, index=results_df.index)
+
+    # 2. Calcola SHAP
+    shap_values = explainer.shap_values(X_real_scaled)
+    shap_values_class1 = shap_values[:, :, 1]
+
+    # 3. SHAP dataframe
+    shap_df = pd.DataFrame(
+        shap_values_class1, columns=X.columns, index=results_df.index)
+
+    # Supponendo che shap_values_df contenga i valori SHAP di una riga
+    shap_values_df = shap_df.copy()  # o shap_df.iloc[[0]] se è già solo 1 riga
+
+    # I valori misurati reali
+    measured_values = X.iloc[0]  # DataFrame con una riga
+
+    # Creiamo un nuovo DataFrame concatenando SHAP e valori misurati
+    df_comparativo = pd.concat(
+        [shap_values_df, measured_values.to_frame().T],
+        axis=0
+    )
+
+    # Rinominiamo gli indici per distinguere le righe
+    # df_comparativo.index = ['SHAP_values', 'Valori_misurati']
+
+    # Visualizziamo il risultato
+    print(df_comparativo)
+
+
+# # 4. Ordina feature per importanza media assoluta
+# mean_abs_shap = np.abs(shap_df).mean().sort_values(ascending=False)
+# shap_df = shap_df[mean_abs_shap.index]
+
+# # 5. Ordina per data
+# shap_df_sorted = shap_df.sort_index()
+
+# # 6. Somma SHAP
+# shap_df_sorted['Sum of SHAP'] = shap_df_sorted.sum(axis=1)
+# first_col = shap_df_sorted.pop('Sum of SHAP')
+# shap_df_sorted.insert(0, 'Sum of SHAP', first_col)
+# shap_df_sorted.insert(1, ' ', np.nan)
+
+# # 7. Allinea `results_df` all’indice shap_df_sorted
+# results_df = results_df.set_index(pd.to_datetime(results_df.index))
+# results_aligned = results_df.loc[shap_df_sorted.index]
+
+# # 8. Aggiorna shap_df_sorted con solo le date valide
+# shap_df_sorted = shap_df_sorted.loc[results_aligned.index]
 
 
 if __name__ == "__main__":
