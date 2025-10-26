@@ -424,58 +424,38 @@ def calcola_stagione(data):
 
 def main():
 
-    # ----- IMPORTA I DATI GREZZI ---------
+    print("📡 Importazione XML in corso...")
     xml_data = fetch_xml()
 
-    # controllo se è cambiato
     if not xml_changed(xml_data):
+        print("✅ Nessuna novità nei dati — stop.")
         return
 
-    # qui prosegui solo se i dati sono nuovi
-    print("✅ Nuovo file XML, procedo con analisi...")
+    print("✅ Nuovi dati trovati, procedo...")
+
+    # Parsing XML → dataframe iniziale
     rilievi = parse_xml(xml_data, CODICE_STAZIONE)
-
-    rilievi_num = [convert_rilievo(r) for r in rilievi]
-
     rilievi_num = convert_all_rilievi(rilievi)
-    # # TEST
-    # rilievi_num["Ta"][0] = 55
-    # rilievi_num["Tmin"][0] = 54
-    # rilievi_num["Tmax"][0] = 1
+
+    # Override di test
     rilievi_num["TH10"][:] = 55
     rilievi_num["TH30"][:] = 54
     rilievi_num["PR"][:] = 0
-    # rilievi_num["HN"][0:2] = [10, 2]
 
-    # ---- TRASFORMA E SISTEMA LA STRUTTRA DELLA TABELLA ------
-
-    print(rilievi_num)
     df = converti_aineva(rilievi_num)
-    # converte la colonna in datetime
+
     df['DataRilievo'] = pd.to_datetime(df['DataRilievo'])
-    # imposta come indice
-    df = df.set_index('DataRilievo')
-    df = df.sort_index(ascending=True)
+    df = df.set_index('DataRilievo').sort_index()
 
     df = df.rename(columns={
-        'Ta': 'TaG',
-        'Tmin': 'TminG',
-        'Tmax': 'TmaxG',
-        'HS': 'HSnum',
-        'HN': 'HNnum',
-        'rho': 'rho',
-        'TH10': 'TH01G',
-        'TH30': 'TH03G',
-        'PR': 'PR'
+        'Ta': 'TaG', 'Tmin': 'TminG', 'Tmax': 'TmaxG', 'HS': 'HSnum',
+        'HN': 'HNnum', 'TH10': 'TH01G', 'TH30': 'TH03G'
     })
 
     df['Stagione'] = df.index.to_series().apply(calcola_stagione)
 
-    # ---- CREA LE FEATURES ------
-
-    # Step-by-step feature calculations with appropriate titles
-    df_before = df.copy()
-    df = calculate_day_of_season(df, season_start_date='12-01')
+    # === FEATURE ENGINEERING ===
+    df = calculate_day_of_season(df)
     df = calculate_snow_height_differences(df)
     df = calculate_new_snow(df)
     df = calculate_temperature(df)
@@ -483,139 +463,88 @@ def main():
     df = calculate_swe(df)
     df = calculate_temperature_gradient(df)
 
-    # ---- FILTRA SOLO LE COLONNE CHE INTERESSANO IL MODELLO ------
-
-    df_final = df.copy()
-
-    colonne_da_selezionare = [
+    feature_set = [
         'HSnum', 'TH01G', 'PR', 'DayOfSeason', 'TmaxG_delta_5d', 'HS_delta_5d',
         'TH03G', 'HS_delta_1d', 'TmaxG_delta_3d', 'Precip_3d', 'TempGrad_HS',
         'HS_delta_2d', 'TmaxG_delta_2d', 'TminG_delta_5d', 'TminG_delta_3d',
-        'Tsnow_delta_3d', 'TaG_delta_5d', 'Tsnow_delta_1d', 'TmaxG_delta_1d', 'Precip_2d'
+        'Tsnow_delta_3d', 'TaG_delta_5d', 'Tsnow_delta_1d',
+        'TmaxG_delta_1d', 'Precip_2d'
     ]
 
-    # # Verifica quali colonne sono effettivamente presenti
-    # colonne_presenti = [
-    #     col for col in colonne_da_selezionare if col in df_final.columns]
-    # colonne_mancanti = [
-    #     col for col in colonne_da_selezionare if col not in df_final.columns]
+    df_selezionato = df[feature_set].copy()
 
-    # print("Colonne presenti:", colonne_presenti)
-    # print("Colonne mancanti:", colonne_mancanti)
-
-    # Selezione delle colonne presenti
-    df_selezionato = df_final[colonne_da_selezionare]
-
-    # Prende l'ultima riga come DataFrame
+    # === CHECK NaN ===
     last_row = df_selezionato.iloc[-1:]
+    missing_features = last_row.columns[last_row.isna().any()]
 
-    # Trova le colonne con NaN nella riga
-    nan_in_last = last_row.isna().any()
+    if len(missing_features) > 0:
+        print("⚠️ Mancano dati in queste feature:")
+        print(missing_features.tolist())
+        print("⛔ Previsione NON possibile.")
+        return
 
-    if nan_in_last.any():
-        print("⚠️ La riga più recente contiene valori NaN:")
-        print("⚠️ NON E' POSSIBILE ESEGUIRE LA PREVISIONE")
-        print(last_row.loc[:, nan_in_last])
-        # return
+    print("✅ Nessun NaN nella riga più recente!")
 
-    else:
-        print("✅ Nessun NaN nella riga più recente!")
-
-    # ---- CARICA MODELLO SVM ALLENATO E BACKGROUND SHAP ------
-
+    # === MODELLO AI ===
     model_path = Path(
-        'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\model\\')
-    # TEST ON 'NEW' DATA IMPORT
+        'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\model')
+
     svm_model = joblib.load(model_path / "svm_model.joblib")
     scaler = joblib.load(model_path / "scaler.joblib")
     X_background = joblib.load(model_path / "shap_background.joblib")
 
-    with open(model_path / "svm_features.json", "r") as f:
-        features_used = json.load(f)
-
-    feature_set = ['HSnum', 'TH01G', 'PR', 'DayOfSeason', 'TmaxG_delta_5d',
-                   'HS_delta_5d', 'TH03G', 'HS_delta_1d', 'TmaxG_delta_3d',
-                   'Precip_3d', 'TempGrad_HS', 'HS_delta_2d', 'TmaxG_delta_2d',
-                   'TminG_delta_5d', 'TminG_delta_3d', 'Tsnow_delta_3d',
-                   'TaG_delta_5d', 'Tsnow_delta_1d',
-                   'TmaxG_delta_1d', 'Precip_2d']   # SHAP 20 features
-
-    available_features = [
-        col for col in feature_set if col in df_selezionato.columns]
-
-    X = last_row
-
-    # Create explainer from background
     explainer = shap.KernelExplainer(svm_model.predict_proba, X_background)
 
-    X_scaled = scaler.transform(X)
+    X_scaled = scaler.transform(last_row)
+    prob = svm_model.predict_proba(X_scaled)[0, 1]
+    prediction = svm_model.predict(X_scaled)[0]
 
-    # 1. Previsione
-    y_pred = svm_model.predict(X_scaled)
-    y_pred_df = pd.DataFrame(y_pred, index=X.index)
+    if prediction == 1 and prob >= 0.6:
+        print(f"🚨 **ALTO RISCHIO DI VALANGHE** (Probabilità: {prob:.3f})")
+    elif prediction == 1 and prob >= 0.4:
+        print(
+            f"⚠️ **ATTENZIONE: Possibile valanga** (Probabilità: {prob:.3f})")
+    else:
+        print(f"✅ **Rischio valanghe basso** (Probabilità: {prob:.3f})")
 
-    # 2. Probabilità di classe positiva (AvalDay = 1)
-    # colonna indice 1 → classe positiva
-    y_proba = svm_model.predict_proba(X_scaled)[:, 1]
+    # === SHAP Analysis ===
+    shap_vals = explainer.shap_values(X_scaled)[0][:, 1]  # 20 valori
+    shap_df = pd.DataFrame(shap_vals, index=last_row.columns, columns=["SHAP"])
 
-    # 3. Costruisci il DataFrame dei risultati
-    results_df = pd.DataFrame({
-        'Predicted_AvalDay': y_pred,
-        'Prob_AvalDay': y_proba
-    }, index=X.index)
+    measured_values = last_row.iloc[0]
+    df_comparativo = pd.concat([
+        shap_df.T,
+        measured_values.to_frame().T
+    ])
+    df_comparativo.index = ["SHAP_values", "Measured"]
 
-    # SHAP ANALYSIS
-    # 1. Scala i dati reali
-    X_real_scaled = scaler.transform(X)
-    X_real_scaled_df = pd.DataFrame(
-        X_real_scaled, columns=X.columns, index=results_df.index)
+    expected_value = explainer.expected_value[1]
 
-    # 2. Calcola SHAP
-    shap_values = explainer.shap_values(X_real_scaled)
-    shap_values_class1 = shap_values[:, :, 1]
+    # === Force plot con unità e contributi >0.2 ===
+    units = {
+        "HSnum": "cm", "TH01G": "°C", "PR": "mm", "DayOfSeason": "gg",
+        "TmaxG_delta_5d": "°C/5d", "HS_delta_5d": "cm/5d", "TH03G": "°C",
+        "HS_delta_1d": "cm/1d", "TmaxG_delta_3d": "°C/3d", "Precip_3d": "mm/3d",
+        "TempGrad_HS": "°C/m", "HS_delta_2d": "cm/2d", "TmaxG_delta_2d": "°C/2d",
+        "TminG_delta_5d": "°C/5d", "TminG_delta_3d": "°C/3d", "Tsnow_delta_3d": "°C/3d",
+        "TaG_delta_5d": "°C/5d", "Tsnow_delta_1d": "°C/1d", "TmaxG_delta_1d": "°C/1d",
+        "Precip_2d": "mm/2d"
+    }
 
-    # 3. SHAP dataframe
-    shap_df = pd.DataFrame(
-        shap_values_class1, columns=X.columns, index=results_df.index)
+    labels = [
+        f"{col} ({units[col]})" if col in units else col
+        for col in last_row.columns
+    ]
 
-    # Supponendo che shap_values_df contenga i valori SHAP di una riga
-    shap_values_df = shap_df.copy()  # o shap_df.iloc[[0]] se è già solo 1 riga
-
-    # I valori misurati reali
-    measured_values = X.iloc[0]  # DataFrame con una riga
-
-    # Creiamo un nuovo DataFrame concatenando SHAP e valori misurati
-    df_comparativo = pd.concat(
-        [shap_values_df, measured_values.to_frame().T],
-        axis=0
+    shap.force_plot(
+        expected_value,
+        shap_vals,
+        labels,
+        contribution_threshold=0.15,
+        matplotlib=True
     )
 
-    # Rinominiamo gli indici per distinguere le righe
-    # df_comparativo.index = ['SHAP_values', 'Valori_misurati']
-
-    # Visualizziamo il risultato
-    print(df_comparativo)
-
-
-# # 4. Ordina feature per importanza media assoluta
-# mean_abs_shap = np.abs(shap_df).mean().sort_values(ascending=False)
-# shap_df = shap_df[mean_abs_shap.index]
-
-# # 5. Ordina per data
-# shap_df_sorted = shap_df.sort_index()
-
-# # 6. Somma SHAP
-# shap_df_sorted['Sum of SHAP'] = shap_df_sorted.sum(axis=1)
-# first_col = shap_df_sorted.pop('Sum of SHAP')
-# shap_df_sorted.insert(0, 'Sum of SHAP', first_col)
-# shap_df_sorted.insert(1, ' ', np.nan)
-
-# # 7. Allinea `results_df` all’indice shap_df_sorted
-# results_df = results_df.set_index(pd.to_datetime(results_df.index))
-# results_aligned = results_df.loc[shap_df_sorted.index]
-
-# # 8. Aggiorna shap_df_sorted con solo le date valide
-# shap_df_sorted = shap_df_sorted.loc[results_aligned.index]
+    print("✅ Analisi completata")
 
 
 if __name__ == "__main__":
