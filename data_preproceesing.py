@@ -419,6 +419,8 @@ def calcola_stagione(data):
 
 
 def main():
+
+    # ----- IMPORTA I DATI GREZZI ---------
     xml_data = fetch_xml()
 
     # controllo se è cambiato
@@ -440,7 +442,7 @@ def main():
     # rilievi_num["TH30"][0] = 54
     # rilievi_num["HN"][0:2] = [10, 2]
 
-    # TRASFORMA E SISTEMA LA STRUTTRA DELLA TABELLA
+    # ---- TRASFORMA E SISTEMA LA STRUTTRA DELLA TABELLA ------
 
     print(rilievi_num)
     df = converti_aineva(rilievi_num)
@@ -464,7 +466,7 @@ def main():
 
     df['Stagione'] = df.index.to_series().apply(calcola_stagione)
 
-    # CREA LE FEATURES
+    # ---- CREA LE FEATURES ------
 
     # Step-by-step feature calculations with appropriate titles
     df_before = df.copy()
@@ -476,7 +478,7 @@ def main():
     df = calculate_swe(df)
     df = calculate_temperature_gradient(df)
 
-    # FILTRA SOLO LE COLONNE CHE INTERESSANO IL MODELLO
+    # ---- FILTRA SOLO LE COLONNE CHE INTERESSANO IL MODELLO ------
 
     df_final = df.copy()
 
@@ -499,8 +501,22 @@ def main():
     # Selezione delle colonne presenti
     df_selezionato = df_final[colonne_da_selezionare]
 
-    # parsing e salvataggio CSV andranno qui
-    # es: parse_xml(xml_data, CODICE_STAZIONE) ...
+    # ---- CARICA MODELLO SVM ALLENATO E BACKGROUND SHAP ------
+    import joblib
+    import shap
+    from pathlib import Path
+
+    model_path = Path(
+        'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\model\\')
+    # TEST ON 'NEW' DATA IMPORT
+    svm_model = joblib.load(model_path / "svm_model.joblib")
+    scaler = joblib.load(model_path / "scaler.joblib")
+    X_background = joblib.load(model_path / "shap_background.joblib")
+
+    with open(model_path / "svm_features.json", "r") as f:
+        features_used = json.load(f)
+
+    available_features = [col for col in feature_set if col in mod1.columns]
 
 
 if __name__ == "__main__":
