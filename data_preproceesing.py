@@ -1,3 +1,4 @@
+import streamlit as st
 import pandas as pd
 import requests
 import xml.etree.ElementTree as ET
@@ -488,6 +489,8 @@ def main():
     # === MODELLO AI ===
     model_path = Path(
         'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\model')
+    plots_path = Path(
+        'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\plots')
 
     svm_model = joblib.load(model_path / "svm_model.joblib")
     scaler = joblib.load(model_path / "scaler.joblib")
@@ -498,14 +501,6 @@ def main():
     X_scaled = scaler.transform(last_row)
     prob = svm_model.predict_proba(X_scaled)[0, 1]
     prediction = svm_model.predict(X_scaled)[0]
-
-    if prediction == 1 and prob >= 0.6:
-        print(f"🚨 **ALTO RISCHIO DI VALANGHE** (Probabilità: {prob:.3f})")
-    elif prediction == 1 and prob >= 0.4:
-        print(
-            f"⚠️ **ATTENZIONE: Possibile valanga** (Probabilità: {prob:.3f})")
-    else:
-        print(f"✅ **Rischio valanghe basso** (Probabilità: {prob:.3f})")
 
     # === SHAP Analysis ===
     shap_vals = explainer.shap_values(X_scaled)[0][:, 1]  # 20 valori
@@ -520,7 +515,7 @@ def main():
 
     expected_value = explainer.expected_value[1]
 
-    # === Force plot con unità e contributi >0.2 ===
+    # === Force plot con unità e contributi ===
     units = {
         "HSnum": "cm", "TH01G": "°C", "PR": "mm", "DayOfSeason": "gg",
         "TmaxG_delta_5d": "°C/5d", "HS_delta_5d": "cm/5d", "TH03G": "°C",
@@ -536,10 +531,28 @@ def main():
         for col in last_row.columns
     ]
 
+    feature_values_row = df_comparativo.loc["Measured"]
+
+    labels_with_values = [
+        f"{col} ({units.get(col, '')}) = {feature_values_row[col]:.2f}"
+        for col in df_comparativo.columns
+    ]
+
+    # === RISULTATI ===
+
+    if prediction == 1 and prob >= 0.6:
+        print(f"🚨 **ALTO RISCHIO DI VALANGHE** (Probabilità: {prob:.3f})")
+    elif prediction == 1 and prob >= 0.4:
+        print(
+            f"⚠️ **ATTENZIONE: Possibile valanga** (Probabilità: {prob:.3f})")
+    else:
+        print(f"✅ **Rischio valanghe basso** (Probabilità: {prob:.3f})")
+
+    # Force plot
     shap.force_plot(
         expected_value,
         shap_vals,
-        labels,
+        labels_with_values,
         contribution_threshold=0.15,
         matplotlib=True
     )
