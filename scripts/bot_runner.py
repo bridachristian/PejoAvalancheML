@@ -12,6 +12,8 @@ import subprocess
 import time
 import traceback
 
+os.chdir("C:/Users/Christian/OneDrive/Desktop/Valanghe/PejoAvalancheML/scripts")
+
 
 # carica .env se presente (solo per sviluppo)
 load_dotenv()
@@ -39,12 +41,22 @@ def send_telegram_image(image_bytes):
 
 
 def handle_updates(offset=None):
-    """Prende gli ultimi messaggi dal bot."""
+    """Prende gli ultimi messaggi dal bot in modo sicuro."""
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
     params = {"offset": offset, "timeout": 10}
-    response = requests.get(url, params=params).json()
-    return response["result"]
+    try:
+        response = requests.get(url, params=params).json()
+    except Exception as e:
+        print("Errore durante la richiesta getUpdates:", e)
+        return []
 
+    # Controlla se Telegram ha risposto con errore
+    if not response.get("ok", False):
+        print("Errore API Telegram:", response.get("description", response))
+        return []
+
+    # Restituisci la lista di aggiornamenti (può essere vuota)
+    return response.get("result", [])
 
 def run_main_script():
     """Esegue main.py e cattura errori."""

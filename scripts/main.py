@@ -24,14 +24,14 @@ import os
 from pathlib import Path
 import os
 
-# Imposta la cartella di lavoro sulla directory dello script
-try:
-    script_dir = Path(__file__).parent.resolve()
-except NameError:
-    script_dir = Path(os.getcwd()).resolve()
+# # Imposta la cartella di lavoro sulla directory dello script
+# try:
+#     script_dir = Path(__file__).parent.resolve()
+# except NameError:
+#     script_dir = Path(os.getcwd()).resolve()
 
-os.chdir(script_dir)
-print(f"Directory corrente: {os.getcwd()}")
+# os.chdir(script_dir)
+# print(f"Directory corrente: {os.getcwd()}")
 
 # ---user function----
 
