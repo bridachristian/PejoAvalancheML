@@ -4,36 +4,34 @@ Created on Sun Nov  9 17:16:27 2025
 
 @author: Christian
 """
-
-import streamlit as st
-import pandas as pd
-import requests
-import xml.etree.ElementTree as ET
-import csv
-import os
-import hashlib
-from datetime import datetime
-import numpy as np
-from pathlib import Path
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import zscore
-import seaborn as sns
-import joblib
-import json
-import shap
-from pathlib import Path
-from io import BytesIO
-import matplotlib.pyplot as plt
-import shap
-# ---user function----
+from telegrambot import send_telegram_message, send_telegram_image
+from convert import convert_rilievo, convert_all_rilievi, converti_aineva
+from getxml import fetch_xml, xml_changed, parse_xml
 from transform import (calculate_day_of_season, calculate_snow_height_differences,
                        calculate_new_snow, calculate_temperature, calculate_swe,
                        calculate_temperature_gradient, calculate_snow_temperature,
                        calcola_stagione)
-from getxml import fetch_xml, xml_changed, parse_xml
-from convert import convert_rilievo, convert_all_rilievi, converti_aineva
-from telegrambot import send_telegram_message, send_telegram_image
+from io import BytesIO
+import shap
+import json
+import joblib
+import seaborn as sns
+from scipy.stats import zscore
+import matplotlib.pyplot as plt
+from pathlib import Path
+import numpy as np
+from datetime import datetime
+import hashlib
+import csv
+import xml.etree.ElementTree as ET
+import requests
+import pandas as pd
+import streamlit as st
+import os
+
+os.chdir(r"C:\Users\Christian\OneDrive\Desktop\Valanghe\PejoAvalancheML\scripts")
+
+# ---user function----
 
 
 # URL dei dati
@@ -47,7 +45,7 @@ def main():
     now = datetime.now().strftime("%d/%m/%Y %H:%M")
     header = f"📊 *Previsione elaborata il {now}*"
 
-    print("📡 Importazione XML in corso...")
+    # print("📡 Importazione XML in corso...")
     xml_data = fetch_xml(URL)
 
     # if not xml_changed(xml_data):
@@ -59,6 +57,29 @@ def main():
     # Parsing XML → dataframe iniziale
     rilievi = parse_xml(xml_data, CODICE_STAZIONE)
     rilievi_num = convert_all_rilievi(rilievi)
+
+    # Supponendo che rilievi_num abbia una colonna 'data' (datetime o stringa ISO)
+    ultima_data = rilievi_num['DataRilievo'].max()
+
+    # Se è stringa → converti in datetime
+    if isinstance(ultima_data, str):
+        ultima_data = datetime.fromisoformat(ultima_data)
+
+    oggi = datetime.now()
+
+    # Calcola differenza in giorni
+    delta_giorni = (oggi.date() - ultima_data.date()).days
+
+    # Se i dati non sono aggiornati
+    if delta_giorni > 0:
+        warning_msg = (
+            f"⚠️ Attenzione: i dati non sono aggiornati!\n"
+            f"L'ultimo rilievo è del {ultima_data.strftime('%d/%m/%Y')} "
+            f"({delta_giorni} giorno{'i' if delta_giorni > 1 else ''} fa)."
+        )
+
+        # Invia messaggio Telegram
+        send_telegram_message(warning_msg)
 
     # Override di test
     rilievi_num["TH10"][:] = 55
@@ -110,7 +131,7 @@ def main():
         # print("⛔ Previsione NON possibile.")
         return
 
-    print("✅ Nessun NaN nella riga più recente!")
+    # print("✅ Nessun NaN nella riga più recente!")
 
     # === MODELLO AI ===
     model_path = Path(
@@ -183,7 +204,7 @@ def main():
         matplotlib=True
     )
 
-    print("✅ Analisi completata")
+    # print("✅ Analisi completata")
 
     # === INVIO SU TELEGRAM ===
 

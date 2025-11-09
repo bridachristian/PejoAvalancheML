@@ -38,6 +38,7 @@ import shap
 import transform
 import getxml
 import convert
+import subprocess
 TOKEN = "8049162233:AAGetIIn76Msresu39P6WhE3RsQWd4Oms2M"
 CHAT_ID = "467116928"
 
@@ -55,3 +56,33 @@ def send_telegram_image(image_bytes):
     files = {"photo": image_bytes}
     data = {"chat_id": CHAT_ID}
     requests.post(url, files=files, data=data)
+
+
+def handle_updates():
+    url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
+    response = requests.get(url).json()
+    return response["result"]
+
+
+def main_bot():
+    updates = handle_updates()
+    for update in updates:
+        if "message" in update:
+            chat_id = update["message"]["chat"]["id"]
+            text = update["message"].get("text", "")
+
+            # Quando ricevi il comando /run
+            if text.lower() == "/run":
+                send_telegram_message("🟢 Avvio script main.py...")
+
+                # Lancia lo script
+                try:
+                    subprocess.run(["python", "main.py"], check=True)
+                    send_telegram_message("✅ Script completato!")
+                except subprocess.CalledProcessError as e:
+                    send_telegram_message(
+                        f"❌ Errore durante l'esecuzione:\n{e}")
+
+
+if __name__ == "__main__":
+    main_bot()
