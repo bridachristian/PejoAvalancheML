@@ -39,7 +39,6 @@ print(f"Directory corrente: {os.getcwd()}")
 # URL dei dati
 URL = "http://dati.meteotrentino.it/service.asmx/tuttiUltimiRilieviNeve"
 CODICE_STAZIONE = "21MB"
-FILE_CSV = "storico_21MB.csv"
 HASH_FILE = "last_hash.txt"   # qui salvo l’hash dell’ultimo XML scaricato
 
 MODEL_PATH = Path(os.getenv("MODEL_PATH"))
