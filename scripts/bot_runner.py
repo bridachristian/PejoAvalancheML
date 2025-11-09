@@ -5,13 +5,23 @@ Created on Sun Nov  9 17:34:43 2025
 @author: Christian
 """
 
+import os
+from dotenv import load_dotenv
 import requests
 import subprocess
 import time
 import traceback
 
-TOKEN = "8049162233:AAGetIIn76Msresu39P6WhE3RsQWd4Oms2M"
-CHAT_ID = "467116928"
+
+# carica .env se presente (solo per sviluppo)
+load_dotenv()
+
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+if not TOKEN or not CHAT_ID:
+    raise RuntimeError(
+        "TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID devono essere impostati nelle env vars")
 
 
 def send_telegram_message(message):

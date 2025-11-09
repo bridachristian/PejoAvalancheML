@@ -7,29 +7,31 @@ Created on Sun Nov  9 17:16:27 2025
 from telegrambot import send_telegram_message, send_telegram_image
 from convert import convert_rilievo, convert_all_rilievi, converti_aineva
 from getxml import fetch_xml, xml_changed, parse_xml
-from transform import (calculate_day_of_season, calculate_snow_height_differences,
-                       calculate_new_snow, calculate_temperature, calculate_swe,
-                       calculate_temperature_gradient, calculate_snow_temperature,
-                       calcola_stagione)
+from transform import (calculate_day_of_season,
+                       calculate_snow_height_differences,
+                       calculate_new_snow, calculate_temperature,
+                       calculate_swe, calculate_temperature_gradient,
+                       calculate_snow_temperature, calcola_stagione)
 from io import BytesIO
 import shap
-import json
 import joblib
-import seaborn as sns
-from scipy.stats import zscore
 import matplotlib.pyplot as plt
 from pathlib import Path
-import numpy as np
 from datetime import datetime
-import hashlib
-import csv
-import xml.etree.ElementTree as ET
-import requests
 import pandas as pd
-import streamlit as st
 import os
 
-os.chdir(r"C:\Users\Christian\OneDrive\Desktop\Valanghe\PejoAvalancheML\scripts")
+from pathlib import Path
+import os
+
+# Imposta la cartella di lavoro sulla directory dello script
+try:
+    script_dir = Path(__file__).parent.resolve()
+except NameError:
+    script_dir = Path(os.getcwd()).resolve()
+
+os.chdir(script_dir)
+print(f"Directory corrente: {os.getcwd()}")
 
 # ---user function----
 
@@ -39,6 +41,9 @@ URL = "http://dati.meteotrentino.it/service.asmx/tuttiUltimiRilieviNeve"
 CODICE_STAZIONE = "21MB"
 FILE_CSV = "storico_21MB.csv"
 HASH_FILE = "last_hash.txt"   # qui salvo l’hash dell’ultimo XML scaricato
+
+MODEL_PATH = Path(os.getenv("MODEL_PATH"))
+PLOTS_PATH = Path(os.getenv("PLOTS_PATH"))
 
 
 def main():
@@ -58,7 +63,7 @@ def main():
     rilievi = parse_xml(xml_data, CODICE_STAZIONE)
     rilievi_num = convert_all_rilievi(rilievi)
 
-    # Supponendo che rilievi_num abbia una colonna 'data' (datetime o stringa ISO)
+    # Supponendo che rilievi_num abbia una colonna 'data'
     ultima_data = rilievi_num['DataRilievo'].max()
 
     # Se è stringa → converti in datetime
@@ -134,14 +139,10 @@ def main():
     # print("✅ Nessun NaN nella riga più recente!")
 
     # === MODELLO AI ===
-    model_path = Path(
-        'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\model')
-    plots_path = Path(
-        'C:\\Users\\Christian\\OneDrive\\Desktop\\Valanghe\\PejoAvalancheML\\plots')
 
-    svm_model = joblib.load(model_path / "svm_model.joblib")
-    scaler = joblib.load(model_path / "scaler.joblib")
-    X_background = joblib.load(model_path / "shap_background.joblib")
+    svm_model = joblib.load(MODEL_PATH / "svm_model.joblib")
+    scaler = joblib.load(MODEL_PATH / "scaler.joblib")
+    X_background = joblib.load(MODEL_PATH / "shap_background.joblib")
 
     explainer = shap.KernelExplainer(svm_model.predict_proba, X_background)
 
@@ -166,17 +167,13 @@ def main():
     units = {
         "HSnum": "cm", "TH01G": "°C", "PR": "mm", "DayOfSeason": "gg",
         "TmaxG_delta_5d": "°C/5d", "HS_delta_5d": "cm/5d", "TH03G": "°C",
-        "HS_delta_1d": "cm/1d", "TmaxG_delta_3d": "°C/3d", "Precip_3d": "mm/3d",
-        "TempGrad_HS": "°C/m", "HS_delta_2d": "cm/2d", "TmaxG_delta_2d": "°C/2d",
-        "TminG_delta_5d": "°C/5d", "TminG_delta_3d": "°C/3d", "Tsnow_delta_3d": "°C/3d",
-        "TaG_delta_5d": "°C/5d", "Tsnow_delta_1d": "°C/1d", "TmaxG_delta_1d": "°C/1d",
-        "Precip_2d": "mm/2d"
+        "HS_delta_1d": "cm/1d", "TmaxG_delta_3d": "°C/3d",
+        "Precip_3d": "mm/3d", "TempGrad_HS": "°C/m", "HS_delta_2d": "cm/2d",
+        "TmaxG_delta_2d": "°C/2d", "TminG_delta_5d": "°C/5d",
+        "TminG_delta_3d": "°C/3d", "Tsnow_delta_3d": "°C/3d",
+        "TaG_delta_5d": "°C/5d", "Tsnow_delta_1d": "°C/1d",
+        "TmaxG_delta_1d": "°C/1d", "Precip_2d": "mm/2d"
     }
-
-    labels = [
-        f"{col} ({units[col]})" if col in units else col
-        for col in last_row.columns
-    ]
 
     feature_values_row = df_comparativo.loc["Measured"]
 
@@ -184,27 +181,6 @@ def main():
         f"{col} ({units.get(col, '')}) = {feature_values_row[col]:.2f}"
         for col in df_comparativo.columns
     ]
-
-    # === RISULTATI ===
-
-    # if prediction == 1 and prob >= 0.6:
-    #     print(f"🚨 **ALTO RISCHIO DI VALANGHE** (Probabilità: {prob:.3f})")
-    # elif prediction == 1 and prob >= 0.4:
-    #     print(
-    #         f"⚠️ **ATTENZIONE: Possibile valanga** (Probabilità: {prob:.3f})")
-    # else:
-    #     print(f"✅ **Rischio valanghe basso** (Probabilità: {prob:.3f})")
-
-    # Force plot
-    shap.force_plot(
-        expected_value,
-        shap_vals,
-        labels_with_values,
-        contribution_threshold=0.15,
-        matplotlib=True
-    )
-
-    # print("✅ Analisi completata")
 
     # === INVIO SU TELEGRAM ===
 
