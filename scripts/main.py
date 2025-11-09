@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Nov  9 17:16:27 2025
+
+@author: Christian
+"""
+
 import streamlit as st
 import pandas as pd
 import requests
