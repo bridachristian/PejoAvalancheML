@@ -218,6 +218,10 @@ def calculate_snow_temperature(df):
     Calculate snow-related temperature features and categorize snow types based on temperature.
     Resets calculations when the 'Stagione' column changes.
     """
+    # --- ATTENZIONE! NON CORRETTO, SOLO PER FAR FUNZIONARE LO SCRIPT ----
+    df['TH03G'] = df['TH03G'].fillna(0)  # se non ci sono dati di TH30 --> 0 °C
+    # --- ATTENZIONE! NON CORRETTO, SOLO PER FAR FUNZIONARE LO SCRIPT ----
+
     # Hyperbolic transformations
     df['TH10_tanh'] = 20 * np.tanh(0.2 * df['TH01G'])
     df['TH30_tanh'] = 20 * np.tanh(0.2 * df['TH03G'])
