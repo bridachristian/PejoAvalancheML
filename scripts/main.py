@@ -85,10 +85,10 @@ def main():
         # Invia messaggio Telegram
         send_telegram_message(warning_msg)
 
-    # Override di test
-    rilievi_num["TH10"][:] = 55
-    rilievi_num["TH30"][:] = 54
-    rilievi_num["PR"][:] = 70
+    # # Override di test
+    # rilievi_num["TH10"][:] = 55
+    # rilievi_num["TH30"][:] = 54
+    # rilievi_num["PR"][:] = 0
 
     df = converti_aineva(rilievi_num)
 

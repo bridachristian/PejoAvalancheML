@@ -97,6 +97,9 @@ def calculate_snow_height_differences(df):
 
 def calculate_new_snow(df):
     """Calculate cumulative new snow metrics over different periods."""
+    # Sostituisci NaN con 0 in HNnum
+    df['HNnum'] = df['HNnum'].fillna(0)
+
     df['HN_2d'] = df['HNnum'].rolling(
         window=2).sum()  # Cumulative snowfall over 2 days
     # Cumulative snowfall over 3 days

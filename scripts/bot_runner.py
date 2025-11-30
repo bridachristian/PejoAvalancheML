@@ -58,16 +58,18 @@ def handle_updates(offset=None):
     # Restituisci la lista di aggiornamenti (può essere vuota)
     return response.get("result", [])
 
+
 def run_main_script():
     """Esegue main.py e cattura errori."""
     try:
-        send_telegram_message("🟢 Avvio script main.py...")
+        # send_telegram_message("🟢 Avvio script main.py...")
+        send_telegram_message("🟢 Avvio Analisi dati Modello 1...")
         # Lancia lo script; cattura output e errori
         result = subprocess.run(
             ["python", "main.py"], capture_output=True, text=True
         )
         if result.returncode == 0:
-            send_telegram_message("✅ Script completato correttamente!")
+            send_telegram_message("✅ Analisi completata!")
         else:
             # Se c'è un errore, invia stdout e stderr
             msg = f"❌ Errore nello script:\nSTDOUT:\n{
