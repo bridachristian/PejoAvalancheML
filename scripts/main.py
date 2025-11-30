@@ -38,9 +38,9 @@ import os
 
 # URL dei dati
 URL = "http://dati.meteotrentino.it/service.asmx/tuttiUltimiRilieviNeve"
-CODICE_STAZIONE = "21MB"
 HASH_FILE = "last_hash.txt"   # qui salvo l’hash dell’ultimo XML scaricato
 
+CODICE_STAZIONE = os.getenv("CODICE_STAZIONE")
 MODEL_PATH = Path(os.getenv("MODEL_PATH"))
 PLOTS_PATH = Path(os.getenv("PLOTS_PATH"))
 
