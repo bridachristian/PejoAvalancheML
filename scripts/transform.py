@@ -68,29 +68,29 @@ def calculate_snow_height_differences(df):
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError("The DataFrame index must be a DatetimeIndex.")
 
-    # Identify where Stagione changes
-    stagione_changes = df['Stagione'] != df['Stagione'].shift(1)
+    # # Identify where Stagione changes
+    # stagione_changes = df['Stagione'] != df['Stagione'].shift(1)
 
-    # Reset differences to NaN for each new season
-    for col in [f'HS_delta_{period}d' for period in [1, 2, 3, 5]]:
-        df.loc[stagione_changes, col] = np.nan
+    # # Reset differences to NaN for each new season
+    # for col in [f'HS_delta_{period}d' for period in [1, 2, 3, 5]]:
+    #     df.loc[stagione_changes, col] = np.nan
 
-    # Set HS_delta_2d, HS_delta_3d, and HS_delta_5d to NaN for 2, 3, 5 days following a Stagione change
-    for period in [2, 3, 5]:
-        for idx in df.index[stagione_changes]:
-            # Add the specified period to the current timestamp using pd.Timedelta
-            end_idx = idx + pd.Timedelta(days=period)
+    # # Set HS_delta_2d, HS_delta_3d, and HS_delta_5d to NaN for 2, 3, 5 days following a Stagione change
+    # for period in [2, 3, 5]:
+    #     for idx in df.index[stagione_changes]:
+    #         # Add the specified period to the current timestamp using pd.Timedelta
+    #         end_idx = idx + pd.Timedelta(days=period)
 
-            # Set the snow height differences to NaN for the period following the change
-            df.loc[idx + pd.Timedelta(days=1): end_idx,
-                   f'HS_delta_{period}d'] = np.nan
+    #         # Set the snow height differences to NaN for the period following the change
+    #         df.loc[idx + pd.Timedelta(days=1): end_idx,
+    #                f'HS_delta_{period}d'] = np.nan
 
-    # Filter by z-score for each HS_delta_Xd column
-    for col in [f'HS_delta_{period}d' for period in [1, 2, 3, 5]]:
-        # Calculate z-scores, ignoring NaN values
-        col_zscore = zscore(df[col], nan_policy='omit')
-        # Set values with z-scores exceeding ±3 to NaN
-        df[col] = np.where(np.abs(col_zscore) > 3, np.nan, df[col])
+    # # Filter by z-score for each HS_delta_Xd column
+    # for col in [f'HS_delta_{period}d' for period in [1, 2, 3, 5]]:
+    #     # Calculate z-scores, ignoring NaN values
+    #     col_zscore = zscore(df[col], nan_policy='omit')
+    #     # Set values with z-scores exceeding ±3 to NaN
+    #     df[col] = np.where(np.abs(col_zscore) > 3, np.nan, df[col])
 
     return df
 
@@ -98,6 +98,8 @@ def calculate_snow_height_differences(df):
 def calculate_new_snow(df):
     """Calculate cumulative new snow metrics over different periods."""
     # Sostituisci NaN con 0 in HNnum
+    df['HNnum'] = df['HNnum'].replace(999, 1)
+
     df['HNnum'] = df['HNnum'].fillna(0)
 
     df['HN_2d'] = df['HNnum'].rolling(
@@ -145,17 +147,17 @@ def calculate_temperature(df):
             df[col_name] = df[temp_col].diff(periods=period)
             df.loc[stagione_changes, col_name] = np.nan
 
-    # Set NaN for 2, 3, 5 days after a season change for each relevant column
-    for period in [2, 3, 5]:
-        # Set NaN for the next 'period' days after the season change
-        for idx in df.index[stagione_changes]:
-            end_idx = idx + pd.Timedelta(days=period)
-            # Ensure the range includes the next 'period' days
-            df.loc[idx + pd.Timedelta(days=1): end_idx, [
-                f'Tmin_{period}d', f'Tmax_{period}d', f'TempAmplitude_{period}d']] = np.nan
-            for temp_col in ['TaG', 'TminG', 'TmaxG']:
-                df.loc[idx + pd.Timedelta(days=1): end_idx,
-                       f'{temp_col}_delta_{period}d'] = np.nan
+    # # Set NaN for 2, 3, 5 days after a season change for each relevant column
+    # for period in [2, 3, 5]:
+    #     # Set NaN for the next 'period' days after the season change
+    #     for idx in df.index[stagione_changes]:
+    #         end_idx = idx + pd.Timedelta(days=period)
+    #         # Ensure the range includes the next 'period' days
+    #         df.loc[idx + pd.Timedelta(days=1): end_idx, [
+    #             f'Tmin_{period}d', f'Tmax_{period}d', f'TempAmplitude_{period}d']] = np.nan
+    #         for temp_col in ['TaG', 'TminG', 'TmaxG']:
+    #             df.loc[idx + pd.Timedelta(days=1): end_idx,
+    #                    f'{temp_col}_delta_{period}d'] = np.nan
 
     return df
 
@@ -185,22 +187,22 @@ def calculate_swe(df):
         col_name = f'Precip_{period}d'
         df[col_name] = df['FreshSWE'].rolling(window=period).sum()
 
-    # Identify season changes
-    stagione_changes = df['Stagione'] != df['Stagione'].shift(1)
+    # # Identify season changes
+    # stagione_changes = df['Stagione'] != df['Stagione'].shift(1)
 
-    # Set NaN for 1, 2, 3, and 5 days after a season change for precipitation sums
-    for period in [1, 2, 3, 5]:
-        for idx in df.index[stagione_changes]:
-            end_idx = idx + pd.Timedelta(days=period)
-            df.loc[idx + pd.Timedelta(days=1): end_idx,
-                   [f'Precip_{p}d' for p in [1, 2, 3, 5]]] = np.nan
+    # # Set NaN for 1, 2, 3, and 5 days after a season change for precipitation sums
+    # for period in [1, 2, 3, 5]:
+    #     for idx in df.index[stagione_changes]:
+    #         end_idx = idx + pd.Timedelta(days=period)
+    #         df.loc[idx + pd.Timedelta(days=1): end_idx,
+    #                [f'Precip_{p}d' for p in [1, 2, 3, 5]]] = np.nan
 
-    # Reset rolling precipitation sums to NaN when the season changes
-    for col in [f'Precip_{period}d' for period in [1, 2, 3, 5]]:
-        df.loc[stagione_changes, col] = np.nan
+    # # Reset rolling precipitation sums to NaN when the season changes
+    # for col in [f'Precip_{period}d' for period in [1, 2, 3, 5]]:
+    #     df.loc[stagione_changes, col] = np.nan
 
-    # Drop intermediate adjustment column
-    df.drop(columns=['rho_adj'], inplace=True)
+    # # Drop intermediate adjustment column
+    # df.drop(columns=['rho_adj'], inplace=True)
 
     return df
 
@@ -252,20 +254,20 @@ def calculate_snow_temperature(df):
     # Handle resets when 'Stagione' changes
     stagione_changes = df['Stagione'] != df['Stagione'].shift(1)
 
-    # Set NaN for snow-related temperature features for 1, 2, 3, and 5 days after a season change
-    for period in [1, 2, 3, 5]:
-        # Set NaN for the following 'period' days for snow temperature differences
-        for idx in df.index[stagione_changes]:
-            end_idx = idx + pd.Timedelta(days=period)
-            df.loc[idx + pd.Timedelta(days=1): end_idx,
-                   [f'Tsnow_delta_{p}d' for p in [1, 2, 3, 5]]] = np.nan
-            df.loc[idx + pd.Timedelta(days=1): end_idx, ['SnowConditionIndex',
-                                                         'ConsecWetSnowDays', 'TH10_tanh', 'TH30_tanh']] = np.nan
+    # # Set NaN for snow-related temperature features for 1, 2, 3, and 5 days after a season change
+    # for period in [1, 2, 3, 5]:
+    #     # Set NaN for the following 'period' days for snow temperature differences
+    #     for idx in df.index[stagione_changes]:
+    #         end_idx = idx + pd.Timedelta(days=period)
+    #         df.loc[idx + pd.Timedelta(days=1): end_idx,
+    #                [f'Tsnow_delta_{p}d' for p in [1, 2, 3, 5]]] = np.nan
+    #         df.loc[idx + pd.Timedelta(days=1): end_idx, ['SnowConditionIndex',
+    #                                                      'ConsecWetSnowDays', 'TH10_tanh', 'TH30_tanh']] = np.nan
 
-    # Set NaN for snow-related temperature features at the start of each new season
-    for col in [f'Tsnow_delta_{period}d' for period in [1, 2, 3, 5]] + [
-            'SnowConditionIndex', 'ConsecWetSnowDays', 'TH10_tanh', 'TH30_tanh']:
-        df.loc[stagione_changes, col] = np.nan
+    # # Set NaN for snow-related temperature features at the start of each new season
+    # for col in [f'Tsnow_delta_{period}d' for period in [1, 2, 3, 5]] + [
+    #         'SnowConditionIndex', 'ConsecWetSnowDays', 'TH10_tanh', 'TH30_tanh']:
+    #     df.loc[stagione_changes, col] = np.nan
 
     return df
 
