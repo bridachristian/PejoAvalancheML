@@ -111,8 +111,8 @@ def main():
     df = calculate_swe(df)
     df = calculate_temperature_gradient(df)
 
-    if oggi.month < 12:  # TEST
-        df["DayOfSeason"] = 1
+    # if oggi.month < 12:  # TEST
+    #     df["DayOfSeason"] = 1
 
     feature_set = [
         'HSnum', 'TH01G', 'PR', 'DayOfSeason', 'TmaxG_delta_5d', 'HS_delta_5d',
