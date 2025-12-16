@@ -39,6 +39,20 @@ def send_telegram_message(message, chat_id=None):
     requests.post(url, data=payload, timeout=10)
 
 
+def send_forecast_start_button(chat_id):
+    """Invia un messaggio con un bottone inline per iniziare il forecast."""
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    payload = {
+        "chat_id": chat_id,
+        "text": "🤖 Premere il pulsante per inserire forecast:",
+        "reply_markup": {
+            "inline_keyboard": [[{"text": "🟢 Avvia Forecast", "callback_data": "start_forecast"}]]
+        },
+        "parse_mode": "Markdown"
+    }
+    requests.post(url, json=payload, timeout=10)
+
+
 def handle_updates(offset=None):
     url = f"https://api.telegram.org/bot{TOKEN}/getUpdates"
     params = {"timeout": 15}
@@ -123,17 +137,25 @@ def run_main_forecast(forecast_params, chat_id):
 
 def main():
     last_update_id = None
-
-    send_telegram_message(
-        "🤖 Bot avviato e pronto.\nUsa /run per inserire forecast.")
+    send_forecast_start_button(CHAT_ID)
 
     while True:
         updates = handle_updates(
-            offset=(last_update_id + 1) if last_update_id else None
-        )
-
+            offset=(last_update_id + 1) if last_update_id else None)
         for update in updates:
             last_update_id = update["update_id"]
+
+            # -----------------
+            # Bottone premuto
+            # -----------------
+            if "callback_query" in update:
+                callback = update["callback_query"]
+                chat_id = callback["message"]["chat"]["id"]
+                data = callback["data"]
+                if data == "start_forecast":
+                    user_state[chat_id] = {"step": 0, "values": {}}
+                    send_telegram_message(PARAM_FLOW[0][2], chat_id)
+                continue
 
             if "message" not in update:
                 continue
@@ -142,14 +164,7 @@ def main():
             chat_id = msg["chat"]["id"]
             text = msg.get("text", "").strip().lower()
 
-            # -------------------------
-            # COMANDI
-            # -------------------------
-            if text == "/run":
-                user_state[chat_id] = {"step": 0, "values": {}}
-                send_telegram_message(PARAM_FLOW[0][2], chat_id)
-                continue
-
+            # Comando di annullamento
             if text == "/cancel":
                 user_state.pop(chat_id, None)
                 send_telegram_message("❌ Operazione annullata.", chat_id)
@@ -161,101 +176,74 @@ def main():
             if chat_id in user_state:
                 state = user_state[chat_id]
                 step = state["step"]
-
                 key, cast, prompt = PARAM_FLOW[step]
 
                 try:
                     value = cast(text)
 
                     # === Validazioni incrociate ===
-                    if key == "Tmin_forecast":
-                        Tmax = state["values"].get("Tmax_forecast")
-                        Ta = state["values"].get("Ta_forecast")
+                    Tmin = state["values"].get("Tmin_forecast")
+                    Tmax = state["values"].get("Tmax_forecast")
+                    Ta = state["values"].get("Ta_forecast")
+
+                    if key == "Ta_forecast":
+                        if Tmin is not None and value < Tmin:
+                            send_telegram_message(
+                                f"⚠️ Ta_forecast ({value}) < Tmin_forecast ({Tmin}). Riprova.", chat_id)
+                            continue
                         if Tmax is not None and value > Tmax:
                             send_telegram_message(
-                                f"⚠️ Tmin_forecast ({value}) non può essere maggiore di Tmax_forecast ({
-                                    Tmax}). Riprova.",
-                                chat_id
-                            )
+                                f"⚠️ Ta_forecast ({value}) > Tmax_forecast ({Tmax}). Riprova.", chat_id)
+                            continue
+
+                    if key == "Tmin_forecast":
+                        if Tmax is not None and value > Tmax:
+                            send_telegram_message(
+                                f"⚠️ Tmin_forecast ({value}) > Tmax_forecast ({Tmax}). Riprova.", chat_id)
                             continue
                         if Ta is not None and value > Ta:
                             send_telegram_message(
-                                f"⚠️ Tmin_forecast ({value}) non può essere maggiore di Ta_forecast ({
-                                    Ta}). Riprova.",
-                                chat_id
-                            )
+                                f"⚠️ Tmin_forecast ({value}) > Ta_forecast ({Ta}). Riprova.", chat_id)
                             continue
 
                     if key == "Tmax_forecast":
-                        Tmin = state["values"].get("Tmin_forecast")
-                        Ta = state["values"].get("Ta_forecast")
                         if Tmin is not None and value < Tmin:
                             send_telegram_message(
-                                f"⚠️ Tmax_forecast ({value}) non può essere minore di Tmin_forecast ({
-                                    Tmin}). Riprova.",
-                                chat_id
-                            )
+                                f"⚠️ Tmax_forecast ({value}) < Tmin_forecast ({Tmin}). Riprova.", chat_id)
                             continue
                         if Ta is not None and value < Ta:
                             send_telegram_message(
-                                f"⚠️ Tmax_forecast ({value}) non può essere minore di Ta_forecast ({
-                                    Ta}). Riprova.",
-                                chat_id
-                            )
-                            continue
-
-                    if key == "Ta_forecast":
-                        Tmin = state["values"].get("Tmin_forecast")
-                        Tmax = state["values"].get("Tmax_forecast")
-                        if Tmin is not None and value < Tmin:
-                            send_telegram_message(
-                                f"⚠️ Ta_forecast ({value}) non può essere minore di Tmin_forecast ({
-                                    Tmin}). Riprova.",
-                                chat_id
-                            )
-                            continue
-                        if Tmax is not None and value > Tmax:
-                            send_telegram_message(
-                                f"⚠️ Ta_forecast ({value}) non può essere maggiore di Tmax_forecast ({
-                                    Tmax}). Riprova.",
-                                chat_id
-                            )
+                                f"⚠️ Tmax_forecast ({value}) < Ta_forecast ({Ta}). Riprova.", chat_id)
                             continue
 
                     # === Validazione nightclouds_forecast ===
-
                     if key == "nightclouds_forecast":
                         value = value.replace("_", " ").lower()
                         if value not in VALID_NIGHTCLOUDS:
                             send_telegram_message(
-                                "⚠️ Valore non valido. Scrivi: sereno / poco nuvoloso / nuvoloso",
-                                chat_id
-                            )
-                            continue  # rimane nello stesso step
+                                "⚠️ Valore non valido. Scrivi: sereno / poco nuvoloso / nuvoloso", chat_id)
+                            continue
 
+                    # Salva valore
                     state["values"][key] = value
                     state["step"] += 1
 
+                    # Passa al prossimo step o esegue main_forecast
                     if state["step"] < len(PARAM_FLOW):
                         send_telegram_message(
-                            PARAM_FLOW[state["step"]][2],
-                            chat_id
-                        )
+                            PARAM_FLOW[state["step"]][2], chat_id)
                     else:
                         # Riepilogo
                         summary = "*📋 Parametri forecast inseriti:*\n"
                         for k, v in state["values"].items():
                             summary += f"- *{k}*: {v}\n"
-
                         send_telegram_message(summary, chat_id)
                         run_main_forecast(state["values"], chat_id)
                         del user_state[chat_id]
 
                 except ValueError:
                     send_telegram_message(
-                        "⚠️ Valore non valido, riprova.",
-                        chat_id
-                    )
+                        "⚠️ Valore non valido, riprova.", chat_id)
 
         time.sleep(2)
 
