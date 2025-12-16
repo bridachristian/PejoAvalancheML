@@ -45,11 +45,11 @@ CODICE_STAZIONE = os.getenv("CODICE_STAZIONE")
 MODEL_PATH = Path(os.getenv("MODEL_PATH"))
 PLOTS_PATH = Path(os.getenv("PLOTS_PATH"))
 
-Ta_forecast = float(os.getenv("Ta_forecast", 0))
-Tmin_forecast = float(os.getenv("Tmin_forecast", -3))
-Tmax_forecast = float(os.getenv("Tmax_forecast", 7))
-HN_forecast = float(os.getenv("HN_forecast", 20))
-nightclouds = os.getenv("nightclouds", "sereno")
+Ta_forecast = float(os.getenv("Ta_forecast", -1))
+Tmin_forecast = float(os.getenv("Tmin_forecast", -5))
+Tmax_forecast = float(os.getenv("Tmax_forecast", 5))
+HN_forecast = float(os.getenv("HN_forecast", 10))
+nightclouds_forecast = os.getenv("nightclouds_forecast", "sereno")
 
 
 def estimate_density(Ta):
@@ -71,20 +71,20 @@ def estimate_density(Ta):
         return 170
 
 
-def estimate_snow_temperatures(HS, nightclouds, TH10_last=None, TH30_last=None):
+def estimate_snow_temperatures(HS, nightclouds_forecast, TH10_last=None, TH30_last=None):
     """
     Stima le temperature della neve a 10 e 30 cm dalla superficie.
     - Se TH10_last e TH30_last sono disponibili → applica delta notturni
     - Altrimenti crea un profilo lineare tra suolo (0°C) e superficie
 
     HS = altezza neve totale (cm)
-    nightclouds = 'sereno', 'poco_nuvoloso', 'nuvoloso'
+    nightclouds_forecast = 'sereno', 'poco_nuvoloso', 'nuvoloso'
     """
     # Definiamo i delta notturni (raffreddamento verso la superficie)
-    if nightclouds == 'sereno':
+    if nightclouds_forecast == 'sereno':
         delta_TH10 = -4
         delta_TH30 = -2
-    elif nightclouds == 'poco_nuvoloso':
+    elif nightclouds_forecast == 'poco_nuvoloso':
         delta_TH10 = -2
         delta_TH30 = -1
     else:  # nuvoloso
@@ -142,7 +142,7 @@ def create_forecast_row(rilievi_num):
     TH10, TH30 = estimate_snow_temperatures(HS=last['HS'],
                                             TH10_last=last['TH10'],
                                             TH30_last=last['TH30'],
-                                            nightclouds=nightclouds
+                                            nightclouds_forecast=nightclouds_forecast
                                             )
     last["TH10"] = TH10
     last["TH30"] = TH30
@@ -151,6 +151,46 @@ def create_forecast_row(rilievi_num):
     last["DataRilievo"] = new_date
 
     return last
+
+
+def plot_shap_oggi_domani_single(shap_df, top_n=20):
+    SHAP_NEG = "#258ae5"   # SHAP blue
+    SHAP_POS = "#ff0e57"   # SHAP magenta
+
+    # Seleziona feature più importanti
+    df = shap_df[["Oggi", "Domani"]].copy()
+    df["max_abs"] = df.abs().max(axis=1)
+    df = df.sort_values("max_abs", ascending=False).head(top_n)
+    df = df.drop(columns="max_abs")
+
+    # Ordine per Oggi
+    df = df.sort_values("Oggi")
+
+    y = np.arange(len(df))
+    h = 0.35  # spessore barre
+
+    plt.figure(figsize=(8, 6))
+
+    # OGGI
+    colors_oggi = df["Oggi"].apply(lambda x: SHAP_POS if x > 0 else SHAP_NEG)
+    plt.barh(y + h/2, df["Oggi"], height=h, color=colors_oggi, label="Oggi")
+
+    # DOMANI
+    colors_domani = df["Domani"].apply(
+        lambda x: SHAP_POS if x > 0 else SHAP_NEG)
+    plt.barh(y - h/2, df["Domani"], height=h,
+             color=colors_domani, alpha=0.5, label="Domani")
+
+    # Asse Y
+    plt.yticks(y, df.index)
+
+    # Zero line
+    plt.axvline(0, color="black", linewidth=1)
+
+    plt.xlabel("SHAP value")
+    plt.title("Contributo delle feature al rischio valanghe (OGGI vs DOMANI)")
+    plt.legend()
+    plt.tight_layout()
 
 
 def main():
@@ -228,6 +268,8 @@ def main():
     # Invia il messaggio unico
     send_telegram_message(final_message)
 
+    shap_df = pd.DataFrame(index=last_two_rows.columns)
+
     for i, label in enumerate(labels):
         # print(i)
         # print(label)
@@ -261,15 +303,25 @@ def main():
 
         # === SHAP Analysis ===
         shap_vals = explainer.shap_values(X_scaled)[0][:, 1]  # 20 valori
-        shap_df = pd.DataFrame(
-            shap_vals, index=last_row.columns, columns=["SHAP"])
+
+        # shap_df = pd.DataFrame(
+        #     shap_vals, index=last_row.columns, columns=["SHAP"])
+
+        shap_df[label] = shap_vals
+
+        # measured_values = last_row.iloc[0]
+        # df_comparativo = pd.concat([
+        #     shap_df.T,
+        #     measured_values.to_frame().T
+        # ])
+        # df_comparativo.index = ["SHAP_values", "Measured"]
 
         measured_values = last_row.iloc[0]
-        df_comparativo = pd.concat([
-            shap_df.T,
-            measured_values.to_frame().T
-        ])
-        df_comparativo.index = ["SHAP_values", "Measured"]
+        # prendi solo la prima riga dei valori SHAP
+        shap_row = shap_df.T.iloc[0]
+
+        df_comparativo = pd.DataFrame([shap_row, measured_values],
+                                      index=["SHAP_values", "Measured"])
 
         expected_value = explainer.expected_value[1]
 
@@ -297,10 +349,10 @@ def main():
         row_date = last_row.index[0].strftime("%d/%m/%Y")
         header_inside = f"*Valida per: {label} - {row_date}*"
 
-        if prediction == 1 and prob >= 0.6:
+        if prob >= 0.6:
             risk_msg = f"🚨 *ALTO RISCHIO DI VALANGHE* (Probabilità: {
                 100*prob:.0f}%)"
-        elif prediction == 1 and prob >= 0.4:
+        elif prob >= 0.4:
             risk_msg = f"⚠️ *ATTENZIONE: Possibile valanga* (Probabilità: {
                 100*prob:.0f}%)"
         else:
@@ -330,6 +382,17 @@ def main():
         buf.seek(0)
         send_telegram_image(buf)
         plt.close()
+
+    shap_df['Differenza'] = shap_df['Domani'] - shap_df['Oggi']
+
+    plot_shap_oggi_domani_single(shap_df)
+
+    buf = BytesIO()
+    plt.savefig(buf, format="png", dpi=150, bbox_inches="tight")
+    buf.seek(0)
+
+    send_telegram_image(buf)
+    plt.close()
 
 
 if __name__ == "__main__":
