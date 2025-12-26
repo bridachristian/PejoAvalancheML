@@ -106,7 +106,7 @@ def run_main_forecast(forecast_params, chat_id):
             env[k] = str(v)
 
         subprocess.Popen(
-            ["python", "main_forecast_test.py", "full"],
+            ["python", "main_forecast_2buttons.py", "full"],
             env=env
         )
 
@@ -124,7 +124,7 @@ def run_today_forecast(chat_id):
 
         env = os.environ.copy()
         subprocess.Popen(
-            ["python", "main_forecast_test.py", "today"],
+            ["python", "main_forecast_2buttons.py", "today"],
             env=env
         )
 
