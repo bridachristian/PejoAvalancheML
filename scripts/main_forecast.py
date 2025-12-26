@@ -157,39 +157,57 @@ def plot_shap_oggi_domani_single(shap_df, top_n=20):
     SHAP_NEG = "#258ae5"   # SHAP blue
     SHAP_POS = "#ff0e57"   # SHAP magenta
 
-    # Seleziona feature più importanti
-    df = shap_df[["Oggi", "Domani"]].copy()
-    df["max_abs"] = df.abs().max(axis=1)
-    df = df.sort_values("max_abs", ascending=False).head(top_n)
+    # --- Seleziona solo colonne SHAP ---
+    shap_only = shap_df[["Oggi", "Domani"]].copy()
+    shap_only["max_abs"] = shap_only.abs().max(axis=1)
+    df = shap_only.sort_values("max_abs", ascending=False).head(top_n)
     df = df.drop(columns="max_abs")
 
-    # Ordine per Oggi
+    # Valori misurati / previsti
+    df["Oggi_valore"] = shap_df.loc[df.index, "Oggi_valore"]
+    df["Domani_valore"] = shap_df.loc[df.index, "Domani_valore"]
+
+    # Ordina per Oggi SHAP
     df = df.sort_values("Oggi")
 
     y = np.arange(len(df))
     h = 0.35  # spessore barre
 
-    plt.figure(figsize=(8, 6))
+    fig, ax = plt.subplots(figsize=(10, max(6, len(df)*0.4)))
 
-    # OGGI
+    # --- Barre OGGI ---
     colors_oggi = df["Oggi"].apply(lambda x: SHAP_POS if x > 0 else SHAP_NEG)
-    plt.barh(y + h/2, df["Oggi"], height=h, color=colors_oggi, label="Oggi")
+    ax.barh(y + h/2, df["Oggi"], height=h, color=colors_oggi, label="Oggi")
 
-    # DOMANI
+    # --- Barre DOMANI ---
     colors_domani = df["Domani"].apply(
         lambda x: SHAP_POS if x > 0 else SHAP_NEG)
-    plt.barh(y - h/2, df["Domani"], height=h,
-             color=colors_domani, alpha=0.5, label="Domani")
+    ax.barh(y - h/2, df["Domani"], height=h,
+            color=colors_domani, alpha=0.5, label="Domani")
 
-    # Asse Y
-    plt.yticks(y, df.index)
+    # --- Etichette feature a sinistra ---
+    ax.set_yticks(y)
+    ax.set_yticklabels(df.index)
 
-    # Zero line
-    plt.axvline(0, color="black", linewidth=1)
+    # --- Secondo asse Y a destra per valori OGGI | DOMANI ---
+    ax2 = ax.twinx()
+    y_labels_right = [f"{oggi_val:.2f} | {domani_val:.2f}"
+                      for oggi_val, domani_val in zip(df["Oggi_valore"], df["Domani_valore"])]
+    ax2.set_ylim(ax.get_ylim())  # allineamento y
+    ax2.set_yticks(y)
+    ax2.set_yticklabels(y_labels_right)
+    ax2.tick_params(axis='y', length=0)  # rimuove i tick se vuoi solo testo
 
-    plt.xlabel("SHAP value")
-    plt.title("Contributo delle feature al rischio valanghe (OGGI vs DOMANI)")
-    plt.legend()
+    # Titolo asse destro
+    ax2.set_ylabel("OGGI | DOMANI", rotation=270, labelpad=15, fontsize=10)
+
+    # Linea zero
+    ax.axvline(0, color="black", linewidth=1)
+
+    ax.set_xlabel("SHAP value")
+    ax.set_title(
+        "Contributo delle feature al rischio valanghe (OGGI vs DOMANI)")
+    ax.legend()
     plt.tight_layout()
 
 
@@ -270,6 +288,10 @@ def main():
 
     shap_df = pd.DataFrame(index=last_two_rows.columns)
 
+    # aggiungi subito i valori misurati / previsti
+    shap_df["Oggi_valore"] = last_two_rows.iloc[0].values
+    shap_df["Domani_valore"] = last_two_rows.iloc[1].values
+
     for i, label in enumerate(labels):
         # print(i)
         # print(label)
@@ -277,15 +299,15 @@ def main():
         last_row = last_two_rows.iloc[i:i+1]
         missing_features = last_row.columns[last_row.isna().any()]
 
-        if len(missing_features) > 0:
-            error_msg = f"⚠️ *Attenzione! Mancano dati in queste feature:*\n{
-                ', '.join(missing_features)}\n⛔ Previsione NON possibile."
-            final_message = f"{header}\n{error_msg}"
+        # if len(missing_features) > 0:
+        #     error_msg = f"⚠️ *Attenzione! Mancano dati in queste feature:*\n{
+        #         ', '.join(missing_features)}\n⛔ Previsione NON possibile."
+        #     final_message = f"{header}\n{error_msg}"
 
-            send_telegram_message(final_message)
-            # print(missing_features.tolist())
-            # print("⛔ Previsione NON possibile.")
-            return
+        #     send_telegram_message(final_message)
+        #     # print(missing_features.tolist())
+        #     # print("⛔ Previsione NON possibile.")
+        #     return
 
         # print("✅ Nessun NaN nella riga più recente!")
 
