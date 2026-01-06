@@ -459,7 +459,7 @@ def main(mode="full"):
 
         shap_df['Differenza'] = shap_df['Domani'] - shap_df['Oggi']
 
-        fig = plot_shap_oggi_domani_single(shap_df, df_input)
+        fig = plot_shap_oggi_domani_with_params_compact(shap_df, df_input)
         buf = BytesIO()
         fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
         buf.seek(0)
