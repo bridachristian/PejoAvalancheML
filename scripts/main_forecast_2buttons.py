@@ -175,75 +175,103 @@ def create_forecast_row(rilievi_num):
     return last
 
 
-def plot_shap_oggi_domani_single(shap_df, top_n=20):
+def plot_shap_oggi_domani_with_params_compact(shap_df, df_input, top_n=20):
+    SHAP_NEG = "#258ae5"
+    SHAP_POS = "#ff0e57"
 
-    SHAP_NEG = "#258ae5"   # SHAP blue
-    SHAP_POS = "#ff0e57"   # SHAP magenta
-
-    # --- Seleziona le colonne SHAP ---
+    # --- Seleziona SHAP ---
     shap_only = shap_df[["Oggi", "Domani"]].copy()
     shap_only["max_abs"] = shap_only.abs().max(axis=1)
-
-    # Prendi le top_n feature per importanza massima
     df = shap_only.sort_values("max_abs", ascending=False).head(top_n)
     df = df.drop(columns="max_abs")
-
-    # --- Ordina per SHAP Oggi ---
-    df = df.sort_values("Oggi")
+    df = df.sort_values("Oggi")  # barre ordinate
 
     y = np.arange(len(df))
-    h = 0.35  # spessore barre
+    h = 0.25  # barre più sottili per compattezza
 
-    fig, ax = plt.subplots(figsize=(12, max(6, len(df)*0.4)))
+    # --- Figura compatta ---
+    fig_height = max(3, len(df)*0.3 + 1.2)  # +1.2 per tabella sotto
+    fig, ax = plt.subplots(figsize=(12, fig_height))
 
-    # --- Barre OGGI ---
+    # Barre Oggi
     colors_oggi = df["Oggi"].apply(lambda x: SHAP_POS if x > 0 else SHAP_NEG)
     ax.barh(y + h/2, df["Oggi"], height=h, color=colors_oggi, label="Oggi")
 
-    # --- Barre DOMANI ---
+    # Barre Domani
     colors_domani = df["Domani"].apply(
         lambda x: SHAP_POS if x > 0 else SHAP_NEG)
     ax.barh(y - h/2, df["Domani"], height=h,
             color=colors_domani, alpha=0.5, label="Domani")
 
-    # --- Etichette feature a sinistra ---
     ax.set_yticks(y)
     ax.set_yticklabels(df.index)
-
-    # Linea zero
     ax.axvline(0, color="black", linewidth=1)
-
-    # --- Tabella valori reali ordinata come le barre sull'asse y ---
-    # Ordina shap_df in base ai valori reali di oggi
-    df_ordered = shap_df.sort_values("Oggi", ascending=False)
-
-    # Y per asse
-    y = np.arange(len(df_ordered))
-
-    # Tabella valori reali ordinata come le barre
-    valori_oggi = df_ordered["Oggi_valore"].values
-    valori_domani = df_ordered["Domani_valore"].values
-
-    cell_text = [[f"{o:.2f}", f"{d:.2f}"]
-                 for o, d in zip(valori_oggi, valori_domani)]
-    table = ax.table(
-        cellText=cell_text,
-        rowLabels=None,
-        colLabels=["Oggi", "Domani"],
-        colWidths=[0.08, 0.08],
-        cellLoc='center',
-        colLoc='center',
-        rowLoc='center',
-        bbox=[1.02, 0, 0.2, 1]  # x, y, width, height
-    )
-
-    table.auto_set_font_size(False)
-    table.set_fontsize(9)
-
     ax.set_xlabel("SHAP value")
     ax.set_title(
         "Contributo delle feature al rischio valanghe (OGGI vs DOMANI)")
     ax.legend()
+
+    # --- Tabella SHAP a destra ---
+    feature_names = df.index.tolist()[::-1]
+    valori_oggi = shap_df.loc[feature_names, "Oggi_valore"].values
+    valori_domani = shap_df.loc[feature_names, "Domani_valore"].values
+    cell_text = [
+        [feature, f"{o:.2f}", f"{d:.2f}"]
+        for feature, o, d in zip(feature_names, valori_oggi, valori_domani)
+    ]
+    table = ax.table(
+        cellText=cell_text,
+        colLabels=["Feature", "Oggi", "Domani"],
+        colWidths=[0.17, 0.07, 0.08],
+        cellLoc='center',
+        colLoc='center',
+        bbox=[1.02, 0, 0.32, 1]
+    )
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    for (row, col), cell in table.get_celld().items():
+        if row == 0:
+            cell.set_text_props(weight='bold')
+
+    # --- Tabella parametri trasposta sotto il grafico con data e colonna larga ---
+    parametri = ["TaG", "TminG", "TmaxG", "HSnum",
+                 "HNnum", "rho", "PR", "TH01G", "TH03G"]
+
+    # Prima colonna: "Oggi DD/MM/YYYY" / "Domani DD/MM/YYYY"
+    giorni = [f"Oggi {df_input.index[0].strftime('%d/%m/%Y')}",
+              f"Domani {df_input.index[1].strftime('%d/%m/%Y')}"]
+
+    # Costruiamo cell_text
+    cell_text_params = []
+    for i, giorno in enumerate(df_input.index):
+        row = [giorni[i]] + \
+            [f"{df_input.loc[giorno, p]:.1f}" for p in parametri]
+        cell_text_params.append(row)
+
+    # Colonne
+    col_labels = ["Giorno"] + parametri
+
+    # Allargare la prima colonna (colWidths)
+    # 0.25 per Giorno, 0.08 per gli altri parametri
+    col_widths = [0.20] + [0.085]*len(parametri)
+
+    # Creiamo la tabella
+    table_params = ax.table(
+        cellText=cell_text_params,
+        colLabels=col_labels,
+        colWidths=col_widths,
+        cellLoc='center',
+        colLoc='center',
+        bbox=[0, -0.25, 1, 0.15]  # posizione sotto il grafico
+    )
+    table_params.auto_set_font_size(False)
+    table_params.set_fontsize(9)
+
+    # Header in grassetto
+    for (row, col), cell in table_params.get_celld().items():
+        if row == 0:
+            cell.set_text_props(weight='bold')
+
     plt.tight_layout()
 
     return fig
@@ -332,28 +360,45 @@ def send_forecast_for_row(last_row, label, mode="today", shap_df=None,):
 
 
 def main(mode="full"):
+    # ======================================================
+    # HEADER
+    # ======================================================
     now_str = datetime.now().strftime("%d/%m/%Y %H:%M")
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
+
     header = f"📊 *Previsione elaborata il {now_str}*"
+
+    # ======================================================
+    # IMPORTAZIONE XML E PARSING
+    # ======================================================
 
     # --- Importazione XML e preparazione dati ---
     xml_data = fetch_xml(URL)
     rilievi = parse_xml(xml_data, CODICE_STAZIONE)
-    rilievi_num = convert_all_rilievi(rilievi)
-    forecast_row = create_forecast_row(rilievi_num)
+    rilievi_orig = convert_all_rilievi(rilievi)
+    forecast_row = create_forecast_row(rilievi_orig)
     rilievi_num = pd.concat(
-        [pd.DataFrame([forecast_row]), rilievi_num], ignore_index=True)
+        [pd.DataFrame([forecast_row]), rilievi_orig], ignore_index=True)
 
-    # --- Controllo aggiornamento dati ---
-    ultima_data = rilievi_num['DataRilievo'].max()
+    # ======================================================
+    # CONTROLLO AGGIORNAMENTO DATI (COME main.py)
+    # ======================================================
+    ultima_data = rilievi_orig['DataRilievo'].max()
+
+    # Se è stringa → converti
     if isinstance(ultima_data, str):
         ultima_data = datetime.fromisoformat(ultima_data)
-    delta_giorni = (datetime.now().date() - ultima_data.date()).days
+
+    oggi = datetime.now()
+    delta_giorni = (oggi.date() - ultima_data.date()).days
+
     if delta_giorni > 0:
-        send_telegram_message(
-            f"⚠️ Attenzione: i dati non sono aggiornati!\n"
+        warning_msg = (
+            f"⚠️ *Attenzione: i dati non sono aggiornati!*\n"
             f"L'ultimo rilievo è del {ultima_data.strftime('%d/%m/%Y')} "
             f"({delta_giorni} giorno{'i' if delta_giorni > 1 else ''} fa)."
         )
+        send_telegram_message(warning_msg)
 
     # --- Conversione AI-Neva ---
     df = converti_aineva(rilievi_num)
@@ -374,6 +419,11 @@ def main(mode="full"):
     df = calculate_swe(df)
     df = calculate_temperature_gradient(df)
 
+    # Definiamo le feature da mostrare
+    parametri = ["TaG", "TminG", "TmaxG", "HSnum",
+                 "HNnum", "rho", "PR", "TH01G", "TH03G"]
+    df_input = df[parametri].copy().iloc[-2:]
+
     feature_set = [
         'HSnum', 'TH01G', 'PR', 'DayOfSeason', 'TmaxG_delta_5d', 'HS_delta_5d',
         'TH03G', 'HS_delta_1d', 'TmaxG_delta_3d', 'Precip_3d', 'TempGrad_HS',
@@ -393,7 +443,7 @@ def main(mode="full"):
         # Solo previsione oggi
         last_row = last_two_rows.iloc[0:1]
         send_forecast_for_row(last_row, label="Oggi", mode=mode)
-        send_telegram_message("✅ Analisi forecast completata!")
+        send_telegram_message("✅ Analisi *OGGI* completata!")
 
     elif mode == "full":
         # Previsione comparativa OGGI e DOMANI
@@ -409,7 +459,7 @@ def main(mode="full"):
 
         shap_df['Differenza'] = shap_df['Domani'] - shap_df['Oggi']
 
-        fig = plot_shap_oggi_domani_single(shap_df)
+        fig = plot_shap_oggi_domani_single(shap_df, df_input)
         buf = BytesIO()
         fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
         buf.seek(0)
