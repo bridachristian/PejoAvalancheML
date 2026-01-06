@@ -61,18 +61,18 @@ def send_forecast_buttons(chat_id):
     requests.post(url, json=payload, timeout=10)
 
 
-def safe_send_telegram_message(msg):
-    try:
-        send_telegram_message(msg)
-    except Exception as e:
-        print(f"[Telegram warning] messaggio non inviato: {e}")
+# def safe_send_telegram_message(msg):
+#     try:
+#         send_telegram_message(msg)
+#     except Exception as e:
+#         print(f"[Telegram warning] messaggio non inviato: {e}")
 
 
-def safe_send_telegram_image(buf):
-    try:
-        send_telegram_image(buf)
-    except Exception as e:
-        print(f"[Telegram warning] immagine non inviata: {e}")
+# def safe_send_telegram_image(buf):
+#     try:
+#         send_telegram_image(buf)
+#     except Exception as e:
+#         print(f"[Telegram warning] immagine non inviata: {e}")
 
 
 def handle_updates(offset=None):

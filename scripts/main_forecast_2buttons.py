@@ -41,8 +41,7 @@ import numpy as np
 from pathlib import Path
 import os
 import sys
-from telegrambot import (send_telegram_message, safe_send_telegram_message,
-                         send_telegram_image, safe_send_telegram_image)
+from telegrambot import send_telegram_message, send_telegram_image
 
 
 # ==============================================
@@ -317,7 +316,7 @@ def send_forecast_for_row(last_row, label, mode="today", shap_df=None,):
     else:
         risk_msg = f"✅ *Rischio valanghe basso* (Probabilità: {100*prob:.0f}%)"
 
-    safe_send_telegram_message(f"{header_inside}\n{risk_msg}")
+    send_telegram_message(f"{header_inside}\n{risk_msg}")
 
     # --- Force Plot SHAP ---
     expected_value = explainer.expected_value[1]
@@ -357,7 +356,7 @@ def send_forecast_for_row(last_row, label, mode="today", shap_df=None,):
         buf = BytesIO()
         plt.gcf().savefig(buf, format="png", bbox_inches='tight', dpi=150)
         buf.seek(0)
-        safe_send_telegram_image(buf)
+        send_telegram_image(buf)
         plt.close()
 
 # ======================================================
@@ -404,7 +403,7 @@ def main(mode="full"):
             f"L'ultimo rilievo è del {ultima_data.strftime('%d/%m/%Y')} "
             f"({delta_giorni} giorno{'i' if delta_giorni > 1 else ''} fa)."
         )
-        safe_send_telegram_message(warning_msg)
+        send_telegram_message(warning_msg)
 
     # --- Conversione AI-Neva ---
     df = converti_aineva(rilievi_num)
@@ -443,13 +442,13 @@ def main(mode="full"):
     last_two_rows = df_selezionato.iloc[-2:]
 
     # Messaggio iniziale
-    safe_send_telegram_message(header)
+    send_telegram_message(header)
 
     if mode == "today":
         # Solo previsione oggi
         last_row = last_two_rows.iloc[0:1]
         send_forecast_for_row(last_row, label="Oggi", mode=mode)
-        safe_send_telegram_message("✅ Analisi *OGGI* completata!")
+        send_telegram_message("✅ Analisi *OGGI* completata!")
 
     elif mode == "full":
         # Previsione comparativa OGGI e DOMANI
@@ -469,9 +468,9 @@ def main(mode="full"):
         buf = BytesIO()
         fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
         buf.seek(0)
-        safe_send_telegram_image(buf)
+        send_telegram_image(buf)
         plt.close(fig)
-        safe_send_telegram_message("✅ Analisi forecast completata!")
+        send_telegram_message("✅ Analisi forecast completata!")
 
 
 if __name__ == "__main__":
