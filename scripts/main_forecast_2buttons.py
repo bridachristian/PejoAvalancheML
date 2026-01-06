@@ -20,6 +20,14 @@ Created on Fri Dec 26 20:48:49 2025
 # URL dei dati
 
 
+import warnings
+from transform import (calculate_day_of_season,
+                       calculate_snow_height_differences,
+                       calculate_new_snow, calculate_temperature,
+                       calculate_swe, calculate_temperature_gradient,
+                       calculate_snow_temperature, calcola_stagione)
+from getxml import fetch_xml, xml_changed, parse_xml
+from convert import convert_rilievo, convert_all_rilievi, converti_aineva
 import requests
 from io import BytesIO
 import shap
@@ -33,26 +41,24 @@ import numpy as np
 from pathlib import Path
 import os
 import sys
-from telegrambot import send_telegram_message, send_telegram_image
-from convert import convert_rilievo, convert_all_rilievi, converti_aineva
-from getxml import fetch_xml, xml_changed, parse_xml
-from transform import (calculate_day_of_season,
-                       calculate_snow_height_differences,
-                       calculate_new_snow, calculate_temperature,
-                       calculate_swe, calculate_temperature_gradient,
-                       calculate_snow_temperature, calcola_stagione)
-from io import BytesIO
-import shap
-import joblib
-import matplotlib.pyplot as plt
-from pathlib import Path
-from datetime import datetime
-import pandas as pd
-import os
-import numpy as np
+from telegrambot import (send_telegram_message, safe_send_telegram_message,
+                         send_telegram_image, safe_send_telegram_image)
 
-from pathlib import Path
-import os
+
+# ==============================================
+# Console pulita: ignoriamo warning sklearn e telegram
+# ==============================================
+
+# Ignora warning di sklearn su versioni diverse dei modelli
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")
+
+# Ignora warning generici di rete/urllib3 (es. timeout Telegram)
+warnings.filterwarnings("ignore", category=UserWarning, module="urllib3")
+warnings.filterwarnings("ignore", category=UserWarning, module="requests")
+
+# ==============================================
+# INPUTS
+# ==============================================
 
 URL = "http://dati.meteotrentino.it/service.asmx/tuttiUltimiRilieviNeve"
 HASH_FILE = "last_hash.txt"   # qui salvo l’hash dell’ultimo XML scaricato
@@ -311,7 +317,7 @@ def send_forecast_for_row(last_row, label, mode="today", shap_df=None,):
     else:
         risk_msg = f"✅ *Rischio valanghe basso* (Probabilità: {100*prob:.0f}%)"
 
-    send_telegram_message(f"{header_inside}\n{risk_msg}")
+    safe_send_telegram_message(f"{header_inside}\n{risk_msg}")
 
     # --- Force Plot SHAP ---
     expected_value = explainer.expected_value[1]
@@ -351,7 +357,7 @@ def send_forecast_for_row(last_row, label, mode="today", shap_df=None,):
         buf = BytesIO()
         plt.gcf().savefig(buf, format="png", bbox_inches='tight', dpi=150)
         buf.seek(0)
-        send_telegram_image(buf)
+        safe_send_telegram_image(buf)
         plt.close()
 
 # ======================================================
@@ -398,7 +404,7 @@ def main(mode="full"):
             f"L'ultimo rilievo è del {ultima_data.strftime('%d/%m/%Y')} "
             f"({delta_giorni} giorno{'i' if delta_giorni > 1 else ''} fa)."
         )
-        send_telegram_message(warning_msg)
+        safe_send_telegram_message(warning_msg)
 
     # --- Conversione AI-Neva ---
     df = converti_aineva(rilievi_num)
@@ -437,13 +443,13 @@ def main(mode="full"):
     last_two_rows = df_selezionato.iloc[-2:]
 
     # Messaggio iniziale
-    send_telegram_message(header)
+    safe_send_telegram_message(header)
 
     if mode == "today":
         # Solo previsione oggi
         last_row = last_two_rows.iloc[0:1]
         send_forecast_for_row(last_row, label="Oggi", mode=mode)
-        send_telegram_message("✅ Analisi *OGGI* completata!")
+        safe_send_telegram_message("✅ Analisi *OGGI* completata!")
 
     elif mode == "full":
         # Previsione comparativa OGGI e DOMANI
@@ -463,9 +469,9 @@ def main(mode="full"):
         buf = BytesIO()
         fig.savefig(buf, format="png", dpi=150, bbox_inches="tight")
         buf.seek(0)
-        send_telegram_image(buf)
+        safe_send_telegram_image(buf)
         plt.close(fig)
-        send_telegram_message("✅ Analisi forecast completata!")
+        safe_send_telegram_message("✅ Analisi forecast completata!")
 
 
 if __name__ == "__main__":
